@@ -1,0 +1,1425 @@
+---
+title: "Tidyverse Training"
+output: html_notebook
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# setup environment
+To setup the environment, I would like to set the working directory and load in the libraries needed
+
+```{r, echo=FALSE, message=FALSE,warning=FALSE}
+#setup working directory
+setwd("C:/Users/natha/Dropbox/R_training")
+
+#load libraries
+library(tidyverse)
+library(forcats)
+
+#alternatives to setwd()
+library(here)
+read_csv(here("data","mtcars.csv"))
+# https://www.youtube.com/watch?v=QYrdsjBvZN4
+
+```
+
+# readr - import data
+Main type of table is a called a tibble
+Packages to use:
+- readr package -- flat files 
+- readxl -- xls 
+- dbi and backend -- SQL 
+- haven package -- SPSS, SAS, STATA 
+- jsonlite -- json
+
+```{r}
+# readr
+read_csv()
+read_tsv()
+read_fwf()
+read_log()
+
+# load a dataset
+df <- read_csv("housing.csv")
+
+
+# readxl
+library(readxl)
+read_excel(path = ".data/mpg.xlsx", sheet = "Sheet 1")
+
+# data.table
+library(data.table)
+df.f <- fread(file = "./data/file.csv", sep = ",")
+
+# database connection
+library(RODBC)
+library(DBI)
+#setup connection
+connection <- odbcConnect("sqlconnect")
+datafromsql <- sqlQuery(connection, "select * from data")
+
+data <- read.csv('test.csv', header = TRUE)
+sqlSave(connection, data, tablename = "test", rownames = FALSE, append = TRUE)
+
+-------------------------
+library(RODBC)
+
+myConn <- odbcDriverConnect(connection= "Driver = {SQL Server Native Client 11.0};server=localhost, database=movies, trusted_connection=yes;")
+
+data = sqlFetch(myConn, "tblActor",colnames = FALSE, rownames = FALSE)
+
+SQLcommand <- sqlQuery(myConn,
+"SELECT * 
+  FROM tblActors
+"
+
+```
+# dplyr - data manipulation
+
+## select()
+Select columns to return
+
+```{r}
+# select
+
+df %>%
+  select(total_bedrooms, total_rooms, median_house_value)
+
+# rename a column
+renamed_df <- df %>%
+  select(total_rooms:median_house_value, rooms = total_rooms)
+
+# exclude something
+exclude_df <- df %>%
+  select(-longitude, -latitude)
+
+# starts with m
+startswithdf <- df %>%
+  select(starts_with(match = "total"))
+
+# select by location instead of name
+df %>%
+  select (1:2)
+
+#select second to last column
+df %>%
+  select((ncol(df)-2):ncol(df))
+
+# other commands
+# select (ends_with("rooms"))
+# select(starts_with(c("rooms", "bedrooms")))
+# select(contains("room"))
+# regular expression using matches
+# select(matches("[pt]al"))
+# select(num_range("wk", 10:15))
+```
+
+## seperate() 
+Pulls apart one column into multiple columns
+
+## unite()
+Inverse of separate - it combines multiple columns into a single column
+
+```{r}
+
+separate_df <- df %>%
+  separate(ocean_proximity, into = c("part1", "part2"), sep = " ", convert = TRUE)
+
+# default is for underscores or specify a sep
+table5 %>% 
+  unite(new, century, year)
+
+```
+
+## pull() 
+Take a single column and turn into a vector
+
+```{r}
+df %>%
+  pull(hwy)
+
+```
+
+## mutate()
+Create, modify, and delete column
+
+##mutate_all()
+Apple function over every column
+
+## mutate_at()
+Apply function over specific columns
+
+## mutate_if()
+Apply function over columns that meet a condition
+
+```{r}
+
+# calculate new column
+df %>%
+  mutate (affordability = median_house_value / (median_income*10000))
+
+# remove variable
+df %>%
+  mutate(longitude = NULL)
+
+# grouped mutate act at grouping
+starwars %>%
+ select(name, mass, homeworld) %>%
+ group_by(homeworld) %>%
+ mutate(rank = min_rank(desc(mass)))
+
+df %>%
+  mutate_at(.tbl = .,
+            vars = c("month", "dayofmonth"),
+            .funs = str_pad, 2, "left","0")
+df %>%
+   mutate_at(.vars = vars(y, z),
+             .funs = list(~ ifelse(x, ., NA)))
+df %>%
+   mutate(across(c(y, z), ~ ifelse(x, ., NA)))
+
+```
+
+
+##pivot_longer() and pivot_wider()
+```{r}
+
+# tidyr functions that replace gather and spread
+
+# tableA looks likes this
+#>   country     `1999` `2000`
+#> * <chr>        <int>  <int>
+#> 1 Afghanistan    745   2666
+#> 2 Brazil       37737  80488
+#> 3 China       212258 213766
+
+tableA %>% 
+  pivot_longer(c(`1999`, `2000`), names_to = "year", values_to = "cases")
+
+#>   country     year   cases
+#>   <chr>       <chr>  <int>
+#> 1 Afghanistan 1999     745
+#> 2 Afghanistan 2000    2666
+#> 3 Brazil      1999   37737
+#> 4 Brazil      2000   80488
+#> 5 China       1999  212258
+#> 6 China       2000  213766
+
+#------------------------------
+
+# tableB looks likes this
+#>   country      year type           count
+#>   <chr>       <int> <chr>          <int>
+#> 1 Afghanistan  1999 cases            745
+#> 2 Afghanistan  1999 population  19987071
+#> 3 Afghanistan  2000 cases           2666
+#> 4 Afghanistan  2000 population  20595360
+#> 5 Brazil       1999 cases          37737
+#> 6 Brazil       1999 population 172006362
+
+tableB %>%
+    pivot_wider(names_from = type, values_from = count)
+
+#> # A tibble: 6 x 4
+#>   country      year  cases population
+#>   <chr>       <int>  <int>      <int>
+#> 1 Afghanistan  1999    745   19987071
+#> 2 Afghanistan  2000   2666   20595360
+#> 3 Brazil       1999  37737  172006362
+#> 4 Brazil       2000  80488  174504898
+#> 5 China        1999 212258 1272915272
+#> 6 China        2000 213766 1280428583
+
+```
+
+## filter() 
+
+```{r}
+
+df %>%
+  filter (weeks_popular >= 20, artist == 'Drake')
+
+```
+
+
+## rename()
+
+```{r}
+df %>%
+  rename(newname = oldname)
+
+df %>%
+  rename(mnfc = manufacturer, 
+         mode = model)  
+
+df %>%
+  select(mnfc = manufacturer, everything())
+
+```
+
+## arrange
+Used to sort rows
+Default is ascending 
+
+```{r}
+
+df %>%
+  arrange(population)
+
+df %>%
+  arrange(desc(population))
+
+```
+
+## distinct() 
+Removes duplicate rows - similar to SQL
+
+```{r}
+
+df %>%
+  distinct(song)
+
+```
+
+## group_by()
+Use to aggregate rows and summarise values
+Use ungroup() to remove grouping variable
+Can group() and ungroup() multiple times
+
+```{r}
+
+df <- df %>%
+  group_by (manufacturer, model) %>%
+  mutate('mean hwy' = mean(hwy)) %>%
+  ungroup()
+
+```
+
+## summarise ()
+first, last, nth, n, n_distinct, IQR, min, max, mean, median, var, sd
+
+## across()
+Apply a function (or functions) across multiple columns
+
+```{r}
+df %>% 
+  group_by(ocean_proximity) %>%
+  summarise(hsh= mean(households))
+
+df %>%
+  group_by (song) %>%
+  summarise (total_weeks_popuular = max(weeks_popular))
+
+starwars %>%
+  summarize(across(height:mass, mean, na.rm = TRUE))
+
+starwars %>%
+  summarize(across(where(is.numeric), mean, na.rm = TRUE))
+
+starwars %>%
+  summarize(across(where(is.numeric), list(min = min, max = max), na.rm = TRUE))
+
+starwars %>% 
+  group_by(species) %>% 
+  filter(n() > 1) %>% 
+  summarise(across(c(sex, gender, homeworld), 
+                   ~ length(unique(.x))),
+                   n=n())
+
+#change to {function}_{column} for naming
+starwars %>% 
+  summarise(across(where(is.numeric),
+                   .fns = list(median = median, mean = mean), 
+                    na.rm = TRUE,
+                   .names = "{.fn}_{.col}"))  
+
+
+```
+
+## summarize_at()
+
+## summarize_if
+
+```{r}
+df %>%
+  summarize_at(vars(lifeExp, pop), funs(mean, sd))
+
+df %>%
+  summarize_if(is.numeric, funs(mean, sd))
+```
+
+## window functions
+Calculations done within the grouping
+
+```{r}
+
+df %>%
+  group_by(country) %>%
+  mutate (lap_pop = lag(pop, order_by = year),
+          pop_chg = pop-lag_pop)
+
+df %>%
+  group_by(manufacturer) %>%
+  mutate('car_id_1' = row_number()) %>%
+  ungroup()
+
+df %>% 
+  mutate ('delta_distance' = distance - lag (distance, 1))
+
+```
+
+## case_when()
+
+```{r}
+
+# case_when used during mutate
+starwars %>%
+  select(name:mass, gender, species) %>%
+  mutate(
+    height_cat = case_when(
+      height > 191 ~ "tall",
+      height < 167 ~ "short",
+      TRUE  ~ "average"
+    )
+  )
+
+x <- 1:16
+
+case_when(
+  x < 5 ~ "less than 5",
+  x < 10 ~ "less than 10",
+  TRUE ~ as.character(x)
+)
+
+case_when(str_detect(string = fruit, pattern = "a") ~ "contains a",
+      T ~ "does not contain a"))
+```
+
+## rownames_to_columns()
+Change row names into a column
+
+```{r}
+head(state.x77)
+#            Population Income Illiteracy Life Exp Murder HS Grad Frost   Area
+# Alabama          3615   3624        2.1    69.05   15.1    41.3    20  50708
+# Alaska            365   6315        1.5    69.31   11.3    66.7   152 566432
+
+rownames_to_column(as.data.frame(state.x77), "State") %>% 
+  str() %>% 
+  as_tibble()
+
+# 'data.frame':	50 obs. of  9 variables:
+#  $ State     : chr  "Alabama" "Alaska" "Arizona" "Arkansas" ...
+#  $ Population: num  3615 365 2212 2110 21198 ...
+
+```
+
+
+## rowwise()
+Do functions by row versus across row (e.g., mean of several columns by row)
+Something that is applied to a dataframe, similar to grouping
+
+```{r}
+# mean across all values in all rows
+fruits %>% 
+  mutate(height_mean = mean(c(height_1, height_2, height_3))) 
+
+## # A tibble: 3 x 7
+##   fruit      height_1 height_2 height_3 width weight height_mean
+##   <chr>         <dbl>    <dbl>    <dbl> <dbl>  <dbl>       <dbl>
+## 1 Banana            4      4.2      3.5     1   0.5         7.74
+## 2 Strawberry        1      0.9      1.2     1   0.25        7.74
+
+# mean across all values in each row
+fruits %>% 
+  rowwise(fruit) %>% 
+  mutate(height_mean = mean(c(height_1, height_2, height_3)))
+
+## # A tibble: 3 x 7
+## # Rowwise:  fruit
+##   fruit      height_1 height_2 height_3 width weight height_mean
+##   <chr>         <dbl>    <dbl>    <dbl> <dbl>  <dbl>       <dbl>
+## 1 Banana            4      4.2      3.5     1   0.5         3.9 
+## 2 Strawberry        1      0.9      1.2     1   0.25        1.03
+
+
+
+# You could combine c_across with column-wise across to compute the proportion of the total for each column:
+
+rf %>% #our row-wise data frame
+  mutate(total = sum(c_across(w:z))) %>% #total each row
+  ungroup() %>% # ungroup the rows
+  mutate(across(w:z, ~ .x / total)) # the .x represents each column
+
+## # A tibble: 6 x 6
+##      id     w     x     y     z total
+##   <int> <dbl> <dbl> <dbl> <dbl> <int>
+## 1     1 0.1   0.2   0.3   0.4     100
+## 2     2 0.106 0.202 0.298 0.394   104
+```
+
+
+# stringr - working with strings
+
+Package used to work with string data
+Can use single '' and double quotes " "
+Do not mix them
+
+## str_detect()
+Returns logical vector if pattern is found
+Similar to base R grepl()
+
+```{r}
+str_detect(fruit,"a")
+
+#exclude
+str_detect(fruit,"a", negate = T)
+
+# case statement
+df %>%
+  mutate (flag = case_when(str_detect(string = fruit, pattern = "a") ~ "contains a",
+      T ~ "does not contain a"))
+
+df %>%
+  mutate ('counta' = str_detect(string = fruit, pattern = "a"))
+
+```
+
+## str_which()
+Locates the indexes of strings which contain pattern match
+Location of the match in a string
+
+## str_count()
+Counts the number of patterns in a given string; returns a vector of counts
+
+```{r}
+# returns a list of elements within vector that contains the pattern
+str_which(string = fruit, pattern = "a")
+
+#returns a tibble with fruit name and count
+df %>%
+  mutate ('counta' = str_count(string = fruit, pattern = "a"))
+
+```
+
+## str_locate()
+Locates the position of the first match
+
+## str_locate_all()
+
+Locates the position of all matches
+
+## str_pad()
+add values if missing
+
+## str_trunc()
+Truncates data to a specific width
+
+## str_trim
+Removes characters
+
+```{r}
+# returns of start and end occurrences 
+df %>%
+  str_locate(fruit, pattern = "a") %>%
+  as_tibble() %>%
+  mutate(fruit=fruit) %>%
+  select(fruit, start, end)
+
+df %>%
+  str_locate(fruit, pattern = "a")
+
+#retuns list of vectors that match
+df %>%
+  str_locate_all(fruit, pattern = "a")
+
+# adds pad to meet width requirements, can be left, right, or both
+df %>%
+mutate (month = str_pad(month, width = 2, side="left", pad = "0"))
+
+str_pad(fruit, width = 20, side = "left", pad = "X")
+
+# truncates and adds ellipsis for anything that is larger than width
+str_trunc(fruit, width = 5, side = "left", ellipsis = "...")
+
+# 
+str_trim(string, side = "left")
+
+```
+
+## str_subset()  
+## str_sub()
+Returns only rows that contain pattern
+
+```{r}
+
+str_detect(string = fruit, pattern = "a")
+
+# extract first three letters
+str_sub(fruit, start = 1, end = 3)
+
+# extract first letter and count word freq
+words.df %>%
+  mutate('first letter' = str_sub(word, 1,1))%>%
+  count('first letter') %>%
+  arrange(desc(n))
+
+str_subset(fruit, pattern = 'c')
+
+df %>%
+  mutate(abbreviation = str_sub(country, 1, 3)
+  
+# return from end
+df %>%
+  mutate(flight_code = str_sub(flight_name, -3, -1)
+
+# rereaokce
+str_sub(string, start, end) <- "new string"     
+
+# replace first matched case
+str_replace(string, pattern, replacement)
+
+# replace all matched cases
+str_replace_all(string, pattern, replacement)
+            
+```
+
+## str_replace()
+Replace first matched case
+
+## str_replace_all()
+Replace all matched cases
+
+## str_to_lower()
+Replaces letters to lower case
+
+## str_to_upper()
+Replaces letters to upper case
+
+## str_to_title()
+Replaces letters to title case
+
+```{r}
+# replaces first three letters 
+str_sub(df$fruit, 1, 3) <- "FRU"
+
+# reaplces first occurence of a with A
+str_replace(fruit, pattern = "a", replacement = "A")
+
+str_to_lower(string)
+
+str_to_upper(string)
+
+str_to_title(string)
+
+```
+
+## str_c
+Join multiple strings into a single string
+String concatenate 
+Collapse a vector strings into single string
+
+## str_duup
+Repeat a string multiple times
+
+## str_split_fixed()
+Split a vectoor strings into matrix of substrings
+
+## str_glue()
+Merge together strings and expressions
+
+## str_glue_data()
+
+```{r}
+
+str_c(fruit1, fruit2, fruit3, sep = ", ")
+
+#repeats the word multiple times
+str_dup(fruit1,5)
+
+# split based on whitespace
+str_split_fixed (fruit, pattern = " ", n = 2)
+
+# splits vector of strings into a list/matrix
+str_split(sentences, pattern = " ")
+
+name <- "nate"
+str_glue("my name is {name}")
+
+# use df to create strings
+str_glue_data(mtcars, "The care {rownames(mtcars)}: {hp} horsepower, {cyl} number of cylinders")
+
+```
+
+## str_extract
+Returns first match
+
+## str_extract_all
+Returns every match
+
+## str_match()
+Returns first match
+
+## str_match_all()
+Returns every match
+Max count of pattern to create number of columns
+
+```{r}
+# returns vector  
+str_extract(string = fruit, pattern = "c")
+
+# returns list of occurences
+str_extract_all(string = fruit, pattern = "c")
+
+```
+
+## str_length()
+Returns the number of characters
+
+```{r}
+# 
+str_length (string = fruit)
+
+# fruits w ith 1o or more characteros
+fruit[str_length (string = fruit) >= 10]
+
+```
+
+## str_view()
+HTML rendering function - first regex match
+
+## str_view_all()
+HTML rendering function - all regex match
+
+```{r}
+
+str_view(string = fruit, pattern = "a")
+
+str_view_all(string = fruit, pattern = "a", match = T)
+
+```
+
+# regular expressions 
+Describing patterns in strings 
+special characters or metacharacters
+classes
+alternates, anchors, and groups
+look arounds and quantifiers
+
+special characters 
+.   match any characters
+\   escape special character
+()  define groups
+[]  define classes / (one of)
+{}  define quantifiers
+^   match start of string
+$ match end of a string
+| OR operator
+?   zero or one quantifier
+*   zero or more quantifier 
++   1 or more quantifier 
+
+Classes
+[:digit:] digits
+[:alpha:] letters 
+[:lower:] lowercase
+[:upper:] uppercase
+
+
+Alternate
+|     or
+[]    one of
+[^ ]  anything but
+[ - ] range
+
+
+(ab|cb) group syntax
+
+Look arounds
+(?=)    followed by       a(?=c)      after a, c    
+(?! )   not followed by   a(?!c)      after a, NOT c
+(?<= )  preceded by       (?<=b)a     before a, b
+(?<! )  not preceded by   (?<!b)a     before a, NOT b
+
+
+Quantifiers
+?     zero or more      a? 
+*     zero or more      a*
++     one or more       a+
+{n}   exactly n         a{2}
+{n,}  n or more         a{2,}
+{n,m} between n and m   a{2,3}
+
+
+```{r}
+
+# find strings with digits
+str_subset(string, pattern = "\\d")
+
+# find strings without digits (at least one shown)
+str_subset(string, "\\D")
+
+# find strings matching a pattern (digit-digit-digit)
+str_subset(string, "\\d-\\d-\\d")
+
+# find strings with whitespace
+str_subset(string, "\\s")
+
+# ANCHORS
+# find words that start with a
+str_subset(words, "^a")
+
+# find words that end with a
+str_subset(words, "a$")
+
+# find a specific word
+str_subset(words, "^actor$")
+
+# ALTERNATES
+# find words that start with af or ag
+str_subset(words, "^af|^ag")
+
+# find words containing to letters x,y,or x
+str_subset(words, "[xyz]")
+
+# find words not containing certain letters (a to y) ^ means to not include, [] means one or more
+str_subset(words, "[^[a-y]]")
+
+# find all sentences that include words the or an
+# group 1 = the
+# group 2 = an
+str_subset(sentences,"(\\sthe\\s|\\s\\san\\s)"
+
+# find words with repeated pairs (back reference) - numbers reference to groups ()
+str_subset(words, "(..)\\1")   # a groups of two letters needs to be repeated (e.g., isis)
+str_subset(words, "(a)(b)") aba
+str_subset(words, "(a)(b)\\1") aba
+str_subset(words, "(a)(b)\\1\\2") abab
+
+
+# look for words where w follows a
+str_subset(words, "w(?=a)")
+
+# look for words where w is not not followed by a
+str_subset(words, "w(?!a)")
+
+
+mutate(setences = str_remove_all(setences, "[:punct:]"), # remove punctuatin
+       sentence = str_to_lower(sentence) %>% # make lowercase
+       mutate('num words' = str_count(string = sentence, pattern = "\\s+")+1) # count number of spaces and add one
+
+```
+
+
+# forcats - working with factors
+
+## fct_count ()
+Returns the counts for each level
+
+## fct_unique
+Returns unique set of levels in a factor
+
+```{r}
+
+# return counts
+df %>%
+  .$manufacturer %>%
+  fct_count()
+
+# alternative
+df %>%
+  count(manufacturer)
+
+# return unique list of factors
+df %>%
+  .$manufacturer %>%
+  fct_unique()
+```
+
+
+## fct_c()
+Combine factors with different levels
+
+Reorder factor levels by first appearance, frequency, or numeric order
+
+## fct_relevel()
+Manually reorder factor levels
+
+## fct_infreq()
+by number of observations with each level (largest first)
+
+## fct_inorder()
+by the order in which they first appear
+
+## fct_rev()
+reverse order factors
+
+## fct_inseq()
+by numeric value of level
+
+## fct_reorder()
+(.f, .x, .fun = median,..., .desc = FALSE) 
+Reorder levels by their relationship with another variable
+
+## fct_reorder2()
+(.f, .x, .y, .fun = last2, ..., .desc = TRUE) 
+Reorder levels by their final values when plotted with two other variables
+
+
+```{r}
+# merge all levels together
+f1 <- factor(c("a", "c"))
+f2 <- factor(c("b", "a"))
+fct_c(f1, f2)
+
+# Relevel to the end
+fct_relevel(f, "a", after = Inf)
+
+# Move to the third position
+fct_relevel(f, "a", after = 2)
+
+# using a list
+fct_relevel(f, c("b", "c", "a"))
+
+# by order in data
+fct_inorder(f)
+
+
+boxplot(data = PlantGrowth, weight ~ reorder(group, weight))
+
+ggplot(diamonds,aes(carat, price, color = fct_reorder2(color, carat, price))) + geom_smooth()
+
+
+
+# number of observations (low to high)
+df %>%
+  mutate(manufacturer = fct_infreq(manufacturer))
+
+# number of observations (low to high)
+df %>%
+  mutate(manufacturer = fct_infreq(manufacturer), 
+         manufacturer = fct_rev(manufacturer))
+
+# by numerical mapping of levels
+fct_inseq(f)
+
+```
+
+
+
+## fct_lump()
+A family for lumping together levels that meet some criteria.
+
+## fct_lump_min()
+lumps levels that appear fewer than min times
+
+## fct_lump_prop()
+lumps levels that appear in fewer prop * n times
+
+## fct_lump_n() 
+lumps all levels except for the n most frequent (or least frequent if n < 0)
+
+## fct_lump_lowfreq() 
+lumps together the least frequent levels, ensuring that "other" is still the smallest level
+
+
+```{r}
+starwars %>%
+  filter(!is.na(species)) %>%
+  mutate(species = fct_lump_n(species, n = 3)) %>%
+  count(species)
+#> # A tibble: 4 × 2
+#>   species     n
+#>   <fct>   <int>
+#> 1 Droid       6
+#> 2 Gungan      3
+#> 3 Human      35
+#> 4 Other      39
+
+fct_lump_min(f, min, other_level = "Other")
+
+```
+
+## fct_recode()
+Manually change levels
+
+## fct_collapse()
+Collapse groups into manually defined groups
+
+## fct_other()
+Replace levels with other
+
+## fct_drop()
+Drop unused levels
+
+## fct_expand()
+Add levels to a factor
+
+## fct_explicit_na()
+Missing data will be put into level x
+
+```{r}
+gss_cat %>% 
+  mutate(partyid = fct_recode(partyid, 
+    "Republican strong" = "Strong republican", 
+    "Republican weak" = "Not str republican",
+    "Independent near rep" = "Ind near rep")) %>% 
+  count(partyid)
+
+gss_cat %>% 
+  mutate(partyid = fct_collapse(partyid, 
+    other = c("No answer", "Don't know", "Other party"), 
+    rep = c("Strong republican", "Not str republican"), 
+    ind = c("Ind,near rep", "Independent", "Ind,near dem"), 
+    dem = c("Not str democrat", "Strong democrat") )) %>%
+count(partyid)
+
+# collapses to Other anything with less than 2
+fct_lump_min(f, min = 2)
+
+fct_other(f, keep = c("a", "b"))
+
+# drops factor x
+f5 <- factor(c("a","b"),c("a","b","x"))
+f6 <- fct_drop(f5)
+
+# adds a factor x
+fct_expand(f6, "x")
+
+# NA assigned a level so they are shown in plots
+fct_explicit_na(factor(c("a", "b", NA)))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Logical Conditions and Loops
+
+## if() and else{}
+if(condition) {
+}
+
+## else if()
+
+## ifelse()
+Returns TRUE, FALSE, or NA
+
+## while loop
+
+
+## for loop
+
+
+
+```{r}
+x <- 5
+
+if(x < 0) {
+  print("x is a negative number")
+} else if (x == 0){
+  print("x is 0")
+} else {
+  print("x is a positive number")
+}
+
+ifelse(example > 0, "Positive", "Not Positive")
+
+#ifelse within mutate
+df %>% 
+  mutate (short_country =
+            ifelse(country == "Bosnia", "B", as.character(country))
+          )
+
+# statement to test, positive response, negative response
+ifelse(4 > 5, "Yes!", "No")
+
+
+# example of a while loop
+a = 5
+b = 1
+
+while(a > b){
+  print("a is greater than b")
+  a <- a + 1
+}
+
+# for every number if 1 to 5, the result will be 1 to power of 2
+result <- c()
+
+for (i in 1:5) {
+  result[i]<- i ^ 2  
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## case_when()
+Multiple conditions within multiple variables
+Take care of NAs first
+
+
+case_when (condition1 ~ rez1, 
+condition2 ~ rez2
+TRUE ~ rez_else)
+
+
+
+
+```{r}
+df %>%
+  mutate(short_country = 
+      case_when(
+        country == "Bosnia" ~ "B",
+        country == "Germany" ~ "G",
+        TRUE ~ as.character(country)
+                )     
+         )
+
+
+
+
+
+```
+
+
+#row_number
+Ranks given rows and works within group_by
+
+df %>%
+  mutate('car_id' = row_number())
+
+
+
+
+
+# lubridate
+
+Working with Dates and Times
+lubridate package
+
+```{r}
+library(lubridate)
+
+today()
+
+now()
+
+ymd("2017-01-31")
+mdy("January 31st, 2017")
+dmy("31-Jan-2017")
+ymd(20170131)
+
+ymd_hms("2017-01-31 20:11:59")
+mdy_hm("01/31/2017 08:01")
+
+make_date()
+
+make_datetime()
+
+
+```
+Time spans
+durations, which represent an exact number of seconds.
+periods, which represent human units like weeks and months.
+intervals, which represent a starting and ending point.
+
+In R, when you subtract two dates, you get a difftime object:
+
+```{r}
+h_age <- today() - ymd(19791014)
+h_age
+as.duration(h_age)
+
+dseconds(1)
+dminutes(1)
+dhours(1)
+ddays(1)
+dweeks(1)
+dyear(1)
+
+
+```
+
+```{r}
+
+```
+
+# function(purrr)
+R is a functional programming (FP) language
+Iteration is completed using a for loop or applying a function across an object
+
+
+map (apply a function, control the output, shortbuts, several arguments)
+
+working with lists
+nested data
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#rlang
+
+
+
+```{r}
+
+```
+
+
+# Joins
+
+
+```{r}
+
+planes %>% 
+  count(tailnum) %>% 
+  filter(n > 1)
+
+flights2 %>%
+  select(-origin, -dest) %>% 
+  left_join(airlines, by = "carrier")
+
+x %>% 
+  inner_join(y, by = "key")
+
+```
+
+
+
+
+
+```{r}
+gss_cat %>% 
+  mutate(relig = fct_lump(relig)) %>% 
+  count(relig)
+
+gss_cat %>%
+  mutate(relig = fct_lump(relig, n = 10)) %>%
+  count(relig, sort = TRUE) %>%
+  print(n = Inf)
+
+```
+
+
+
+
+
+
+
+
+
+
+# purr
+Functional programming tools 
+map() applies iteratively to each element of a list or vector
+
+map(.x, .f, ...)
+
+map() - returns list
+map_chr() - returns char vector
+map_lgl() - returns integer vector
+map_dbl() - returns double vector
+map_dfc() - returns data frame (column bind) - join
+map_dfr() - returns data frame (row bind) - stacked / union
+
+
+
+```{r}
+
+df %>%
+  select(total_bedrooms, total_rooms) %>%
+  map_dfr(.f = mean, na.rm = TRUE)
+
+# example for sets of columns
+
+
+
+# fit multiple lm models based on category
+
+df %>%
+  split(.$households) %>%
+  map(function(df) lm(formula=hwy ~ disp, 
+                      data = df))
+#shorter version
+df %>%
+  split(.$households) %>%
+  map(~lm(hwy ~ disp, data = .))
+
+# extract r2 for each model
+
+models %>%
+  map(summary) %>%
+  map_dbl("r.squared")
+
+```
+
+## walk()
+
+```{r}
+# create multiple plots
+
+plots <- mpg %>%
+  split(.$manufacturer) %>%
+  map(~ggplot(.,aes(displ, hwy))+
+      geom_point()+ 
+      ggtitle(.$manufacturer)
+      )
+
+
+
+```
+
+
+
+## pluck
+
+## keep
+select elements that pass a logical test
+
+## discard
+select elements that do not pass a logical test
+
+
+create directory
+export multiple files
+directory <- ".data/mpg_export"
+
+if(!dir.exists(directory)){
+  dir.create(directory)
+  }
+
+
+
+```{r}
+
+## create plots with map (list of plots)
+plots <- mpg %>% 
+  split(.$manufacturer) %>% 
+  map(~ggplot(., aes(displ, hwy)) + geom_point() + ggtitle(paste0(.$manufacturer)))
+
+## create directory where plots will be stored
+if(!dir.exists("./data/pwalk_plots")){
+  dir.create("./data/pwalk_plots")
+}
+
+## export figures
+list(str_c("./data/pwalk_plots/",names(plots), ".pdf"),  # list of pairs: plot path & plot
+     plots) %>% 
+  pwalk(., ggsave) # save figures
+
+
+## check if directory exists for storing the plots  
+directory <- "./data/mpg_plot_export/" # path to directory
+
+## create directory if neccessary
+if(!dir.exists(directory)){
+  dir.create(directory)
+}
+
+## add a path for each plot
+df.plots <- df.plots %>% 
+  mutate(plot_path = paste0(directory, manufacturer, ".png"))
+  
+## create a list of plot path and plot  for pmap to export plots
+list(plot     = df.plots$plot,            # plot object
+     filename = df.plots$plot_path) %>%   # path to where write .png files
+  pmap(.l = ., .f = ggsave) %>%           # do the export
+  quietly()  # suppress console output!!!
+
+
+```
+
+
+
+
+
+
+# Conditions in R
+
+You can use || (or) and && (and) to combine multiple logical expressions.
+
+if (this) {
+  # do that
+} else if (that) {
+  # do something else
+} else {
+  # 
+}
+
+But if you end up with a very long series of chained if statements, you should consider rewriting. One useful technique is the switch() function. It allows you to evaluate selected code based on position or name.
+
+function(x, y, op) {
+   switch(op,
+     plus = x + y,
+     minus = x - y,
+     times = x * y,
+     divide = x / y,
+     stop("Unknown op!")
+   )
+ }
